@@ -80,19 +80,29 @@ async function idbDelete(key) {
 
 // Try to get a usable handle from IndexedDB, re-requesting permission
 // if needed. Returns null if no handle is stored or access was denied.
-async function getStoredHandle() {
+// Check whether we have a stored handle and whether it currently has
+// permission WITHOUT prompting (queryPermission doesn't need a user
+// gesture). Returns { handle, granted } or null if no handle stored.
+async function getStoredHandleInfo() {
   const handle = await idbGet(HANDLE_KEY);
   if (!handle) return null;
   try {
-    const opts = { mode: 'readwrite' };
-    let perm = await handle.queryPermission(opts);
-    if (perm !== 'granted') {
-      perm = await handle.requestPermission(opts);
-    }
-    if (perm === 'granted') return handle;
-    return null;
+    const granted = await handle.queryPermission({ mode: 'readwrite' }) === 'granted';
+    return { handle, granted };
   } catch (e) {
-    return null;
+    return { handle, granted: false };
+  }
+}
+
+// Re-request permission for a handle. MUST be called from within a
+// user gesture (e.g. a button click) — browsers reject/auto-deny
+// requestPermission() calls made outside of one (such as on page load).
+async function requestHandlePermission(handle) {
+  try {
+    const perm = await handle.requestPermission({ mode: 'readwrite' });
+    return perm === 'granted';
+  } catch (e) {
+    return false;
   }
 }
 
@@ -136,7 +146,8 @@ async function forgetHandle() {
 
 window.WorklogFS = {
   isSupported: isFileSystemAccessSupported,
-  getStoredHandle,
+  getStoredHandleInfo,
+  requestHandlePermission,
   pickExistingFile,
   pickNewFile,
   readFile,
@@ -283,14 +294,16 @@ function WorkLogApp() {
   const [fsSupported] = useState(() => window.WorklogFS && window.WorklogFS.isSupported());
   const [fileHandle, setFileHandle] = useState(null);
   const [fileName, setFileName] = useState(null);
-  const [fileStatus, setFileStatus] = useState('checking'); // checking | connected | disconnected | unsupported
+  const [fileStatus, setFileStatus] = useState('checking'); // checking | connected | needs-permission | disconnected | unsupported
+  const pendingHandleRef = useRef(null);
 
   const openTicket = (ticketId) => {
     setTicketDeepLink(ticketId);
     setTab('tickets');
   };
 
-  // On mount: try to reuse a previously-picked file handle
+  // On mount: check (without prompting) whether we have a previously-picked
+  // file handle and whether it already has permission.
   useEffect(() => {
     (async () => {
       if (!fsSupported) {
@@ -299,11 +312,16 @@ function WorkLogApp() {
         return;
       }
       try {
-        const handle = await window.WorklogFS.getStoredHandle();
-        if (handle) {
-          await loadFromHandle(handle);
-        } else {
+        const info = await window.WorklogFS.getStoredHandleInfo();
+        if (!info) {
           setFileStatus('disconnected');
+        } else if (info.granted) {
+          await loadFromHandle(info.handle);
+        } else {
+          // We have a remembered file, but need a click to re-grant access
+          pendingHandleRef.current = info.handle;
+          setFileName(info.handle.name);
+          setFileStatus('needs-permission');
         }
       } catch (e) {
         setFileStatus('disconnected');
@@ -331,6 +349,19 @@ function WorkLogApp() {
     }
   };
 
+  // Called from a button click — re-requests permission for the
+  // remembered file handle (requires a user gesture to succeed).
+  const reconnectFile = async () => {
+    const handle = pendingHandleRef.current;
+    if (!handle) { setFileStatus('disconnected'); return; }
+    const granted = await window.WorklogFS.requestHandlePermission(handle);
+    if (granted) {
+      await loadFromHandle(handle);
+    } else {
+      setFileStatus('disconnected');
+    }
+  };
+
   const connectExisting = async () => {
     try {
       const handle = await window.WorklogFS.pickExistingFile();
@@ -354,6 +385,7 @@ function WorkLogApp() {
 
   const disconnectFile = async () => {
     await window.WorklogFS.forgetHandle();
+    pendingHandleRef.current = null;
     setFileHandle(null);
     setFileName(null);
     setFileStatus('disconnected');
@@ -421,6 +453,13 @@ function WorkLogApp() {
             onConnectExisting={connectExisting}
             onConnectNew={connectNew}
           />
+        ) : fileStatus === 'needs-permission' ? (
+          <ReconnectScreen
+            fileName={fileName}
+            onReconnect={reconnectFile}
+            onConnectExisting={connectExisting}
+            onConnectNew={connectNew}
+          />
         ) : tab === 'log' ? (
           <DailyLog data={data} update={update} onOpenTicket={openTicket} />
         ) : tab === 'tickets' ? (
@@ -480,7 +519,7 @@ function FileConnectionPanel({ fsSupported, fileStatus, fileName, saveState, onC
     return (
       <div style={styles.saveIndicator}>
         <span style={{ ...styles.saveDot, background: '#d98a8a' }} />
-        Not connected
+        {fileStatus === 'needs-permission' ? 'Needs reconnect' : 'Not connected'}
       </div>
     );
   }
@@ -561,6 +600,36 @@ function ConnectScreen({ fsSupported, onConnectExisting, onConnectNew }) {
       <p style={styles.connectHint}>
         Your browser may ask you to grant access again next time you open this page —
         that's normal and just a single click.
+      </p>
+    </div>
+  );
+}
+
+// Shown when we have a remembered file but the browser needs a
+// fresh user click before it will re-grant filesystem permission.
+function ReconnectScreen({ fileName, onReconnect, onConnectExisting, onConnectNew }) {
+  return (
+    <div style={styles.connectScreen}>
+      <h1 style={styles.connectTitle}>Reconnect your worklog file</h1>
+      <p style={styles.connectText}>
+        This page remembers <strong>{fileName}</strong>, but your browser needs you to
+        confirm access again for this session. Click below to reconnect — your data
+        and settings will load right after.
+      </p>
+      <div style={styles.connectActions}>
+        <button className="btn-primary" style={styles.primaryBtn} onClick={onReconnect}>
+          <Icon.doc/> Reconnect {fileName}
+        </button>
+      </div>
+      <p style={styles.connectHint}>
+        Picked the wrong file before, or want to use a different one?{' '}
+        <button className="btn-secondary" style={{ ...styles.secondaryBtn, display: 'inline-flex' }} onClick={onConnectExisting}>
+          <Icon.doc/> Open a different file
+        </button>{' '}
+        or{' '}
+        <button className="btn-secondary" style={{ ...styles.secondaryBtn, display: 'inline-flex' }} onClick={onConnectNew}>
+          <Icon.addFile/> create a new one
+        </button>.
       </p>
     </div>
   );

@@ -1348,14 +1348,15 @@ function Tickets({ data, update, initialOpenId, onConsumeInitialOpenId }) {
                 )}
                 {openId === t.id && (
                   <button
-                    className="btn-secondary"
-                    style={styles.cardEditBtn}
+                    className="btn-icon"
+                    style={styles.iconBtn}
+                    title={editingId === t.id ? 'Save' : 'Edit'}
                     onClick={(e) => {
                       e.stopPropagation();
                       setEditingId(editingId === t.id ? null : t.id);
                     }}
                   >
-                    {editingId === t.id ? (<><Icon.check/> Save</>) : (<><Icon.pencil/> Edit</>)}
+                    {editingId === t.id ? <Icon.check/> : <Icon.pencil/>}
                   </button>
                 )}
                 <div style={{ position: 'relative' }}>
@@ -1687,11 +1688,12 @@ function KnowledgeBase({ data, update }) {
                   onChange={(e) => rename(active.id, e.target.value)}
                 />
                 <button
-                  className="btn-secondary"
-                  style={styles.cardEditBtn}
+                  className="btn-icon"
+                  style={styles.iconBtn}
+                  title={editMode ? 'Save' : 'Edit'}
                   onClick={() => setEditMode(!editMode)}
                 >
-                  {editMode ? (<><Icon.check/> Save</>) : (<><Icon.pencil/> Edit</>)}
+                  {editMode ? <Icon.check/> : <Icon.pencil/>}
                 </button>
               </div>
               {editMode ? (
@@ -2005,14 +2007,15 @@ function Contributions({ data, update }) {
               )}
               {openId === c.id && (
                 <button
-                  className="btn-secondary"
-                  style={styles.cardEditBtn}
+                  className="btn-icon"
+                  style={styles.iconBtn}
+                  title={editingId === c.id ? 'Save' : 'Edit'}
                   onClick={(e) => {
                     e.stopPropagation();
                     setEditingId(editingId === c.id ? null : c.id);
                   }}
                 >
-                  {editingId === c.id ? (<><Icon.check/> Save</>) : (<><Icon.pencil/> Edit</>)}
+                  {editingId === c.id ? <Icon.check/> : <Icon.pencil/>}
                 </button>
               )}
               <div style={{ position: 'relative' }}>
@@ -2548,12 +2551,6 @@ const styles = {
   ticketTitle: { fontSize: 13.5, flex: 1 },
   ticketLinkCount: { fontSize: 11, color: colors.muted, fontFamily: "'JetBrains Mono', monospace" },
   ticketBody: { display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 6 },
-  cardEditBtn: {
-    display: 'inline-flex', alignItems: 'center', gap: 6,
-    background: 'transparent', border: `1px solid ${colors.border}`, color: colors.muted,
-    borderRadius: 7, padding: '5px 10px', fontSize: 12, cursor: 'pointer',
-    fontFamily: 'inherit', flexShrink: 0,
-  },
   viewText: {
     fontSize: 13, color: colors.text, padding: '8px 10px',
     background: colors.panel2, border: `1px solid ${colors.border}`, borderRadius: 7,
@@ -2658,10 +2655,10 @@ const styles = {
   mdLi: { margin: '3px 0', display: 'list-item' },
   mdLiCheckbox: { margin: '3px 0', display: 'list-item', listStyleType: 'none', marginLeft: -18 },
   mdCheckboxLabel: {
-    display: 'inline-flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer',
+    display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer',
   },
   mdCheckboxInput: {
-    marginTop: 3, width: 14, height: 14, cursor: 'pointer', accentColor: colors.accent, flexShrink: 0,
+    width: 14, height: 14, cursor: 'pointer', accentColor: colors.accent, flexShrink: 0,
   },
   mdCheckboxTextDone: {
     color: colors.muted, textDecoration: 'line-through',

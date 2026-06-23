@@ -179,6 +179,16 @@ function todayStr() {
   return d.toISOString().slice(0, 10);
 }
 
+function weekBounds() {
+  const today = new Date();
+  const sunday = new Date(today);
+  sunday.setDate(today.getDate() - today.getDay()); // go back to Sunday
+  const saturday = new Date(sunday);
+  saturday.setDate(sunday.getDate() + 6);
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  return { from: fmt(sunday), to: fmt(saturday) };
+}
+
 function formatDateLabel(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -655,8 +665,8 @@ function DailyLog({ data, update, onOpenTicket }) {
   const today = todayStr();
   const hasToday = dates.includes(today);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [filterFrom, setFilterFrom] = useState('');
-  const [filterTo, setFilterTo] = useState('');
+  const [filterFrom, setFilterFrom] = useState(() => weekBounds().from);
+  const [filterTo, setFilterTo] = useState(() => weekBounds().to);
 
   const addToday = () => {
     update(d => {
@@ -677,8 +687,9 @@ function DailyLog({ data, update, onOpenTicket }) {
     return true;
   });
 
-  const hasFilter = filterFrom || filterTo;
-  const clearFilter = () => { setFilterFrom(''); setFilterTo(''); };
+  const thisWeek = weekBounds();
+  const hasFilter = filterFrom !== thisWeek.from || filterTo !== thisWeek.to;
+  const clearFilter = () => { setFilterFrom(thisWeek.from); setFilterTo(thisWeek.to); };
 
   return (
     <div style={styles.page}>
@@ -698,7 +709,7 @@ function DailyLog({ data, update, onOpenTicket }) {
           <span style={styles.dateFilterSep}>–</span>
           <DateField value={filterTo} onChange={setFilterTo} placeholder="mm/dd/yyyy" align="left" />
           {hasFilter && (
-            <button className="btn-icon" style={{ ...styles.iconBtn, alignSelf: 'center' }} onClick={clearFilter} title="Clear filter">
+            <button className="btn-icon" style={{ ...styles.iconBtn, alignSelf: 'center' }} onClick={clearFilter} title="Reset to this week">
               ×
             </button>
           )}
@@ -1408,7 +1419,7 @@ function Tickets({ data, update, initialOpenId, onConsumeInitialOpenId }) {
                         <textarea
                           style={styles.textarea}
                           value={t.notes}
-                          placeholder="Details, context, links…"
+                          placeholder="Details, context, links…&#10;&#10;Supports **bold**, _italic_, `code`, [link](url), - bullets, # headings"
                           onChange={(e) => update(d => {
                             d.tickets.find(x => x.id === t.id).notes = e.target.value;
                           })}
@@ -1416,31 +1427,27 @@ function Tickets({ data, update, initialOpenId, onConsumeInitialOpenId }) {
                       </div>
                     </>
                   ) : (
-                    <>
-                      <div style={styles.fieldRow}>
-                        <label style={styles.label}>Code</label>
-                        <div style={styles.viewText}>{t.code || <span style={styles.viewTextEmpty}>—</span>}</div>
+                    <div style={styles.viewCard}>
+                      <div style={styles.viewCardMeta}>
+                        {t.code && <span style={styles.viewCardCode}>{t.code}</span>}
+                        {t.title && <span style={styles.viewCardTitle}>{t.title}</span>}
+                        {!t.code && !t.title && <span style={styles.viewTextEmpty}>No details yet — click Edit to fill this in.</span>}
                       </div>
-                      <div style={styles.fieldRow}>
-                        <label style={styles.label}>Title</label>
-                        <div style={styles.viewText}>{t.title || <span style={styles.viewTextEmpty}>—</span>}</div>
-                      </div>
-                      <div style={styles.fieldRow}>
-                        <label style={styles.label}>Description / Notes</label>
-                        <div style={{ ...styles.viewText, ...styles.viewTextBlock }}>
-                          {t.notes || <span style={styles.viewTextEmpty}>No notes yet.</span>}
+                      {t.notes ? (
+                        <div className="md-body" style={styles.viewCardBody}><MarkdownView text={t.notes} /></div>
+                      ) : (
+                        <div style={styles.viewCardBodyEmpty}>No notes yet.</div>
+                      )}
+                      {linkedDates.length > 0 && (
+                        <div style={styles.viewCardFooter}>
+                          <span style={styles.label}>Mentioned in</span>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                            {linkedDates.map(date => (
+                              <span key={date} style={styles.dateChip}>{date}</span>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    </>
-                  )}
-                  {linkedDates.length > 0 && (
-                    <div style={styles.fieldRow}>
-                      <label style={styles.label}>Mentioned in</label>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {linkedDates.map(date => (
-                          <span key={date} style={styles.dateChip}>{date}</span>
-                        ))}
-                      </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1700,11 +1707,11 @@ function KnowledgeBase({ data, update }) {
                 <textarea
                   style={styles.kbDocBody}
                   value={active.content}
-                  placeholder="Write anything — terminology, how-tos, FAQs, contacts…&#10;&#10;# Heading&#10;## Subheading&#10;**bold** _italic_&#10;- bullet point&#10;- [ ] checkbox&#10;1. numbered item&#10;> quote&#10;`inline code`&#10;---&#10;&#10;| Col A | Col B |&#10;|---|---|&#10;| val 1 | val 2 |&#10;&#10;```&#10;code block&#10;```"
+                  placeholder="Write anything — terminology, how-tos, FAQs, contacts…&#10;&#10;# Heading&#10;## Subheading&#10;**bold** _italic_&#10;- bullet point&#10;- [ ] checkbox&#10;1. numbered item&#10;> quote&#10;`inline code`&#10;[link text](https://url.com)&#10;---&#10;&#10;| Col A | Col B |&#10;|---|---|&#10;| val 1 | val 2 |&#10;&#10;```&#10;code block&#10;```"
                   onChange={(e) => update(d => { d.kb.find(i => i.id === active.id).content = e.target.value; })}
                 />
               ) : (
-                <div className="kb-preview" style={styles.kbPreview}>
+                <div className="kb-preview md-body" style={styles.kbPreview}>
                   {active.content
                     ? <MarkdownView text={active.content} onToggleCheckbox={(lineIndex) => toggleCheckbox(active.id, lineIndex)} />
                     : <span style={{ color: colors.muted }}>Nothing here yet — switch to Edit to start writing.</span>}
@@ -1736,11 +1743,11 @@ function MarkdownView({ text, onToggleCheckbox }) {
   let listStack = [];
 
   const inline = (str) => {
-    // bold, italic, code
+    // bold, italic, code, links
     const parts = [];
     let remaining = str;
     let key = 0;
-    const regex = /(\*\*([^*]+)\*\*|_([^_]+)_|`([^`]+)`)/;
+    const regex = /(\*\*([^*]+)\*\*|_([^_]+)_|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/;
     while (remaining.length) {
       const m = remaining.match(regex);
       if (!m) { parts.push(remaining); break; }
@@ -1748,6 +1755,9 @@ function MarkdownView({ text, onToggleCheckbox }) {
       if (m[2] !== undefined) parts.push(<strong key={key++}>{m[2]}</strong>);
       else if (m[3] !== undefined) parts.push(<em key={key++}>{m[3]}</em>);
       else if (m[4] !== undefined) parts.push(<code key={key++} style={styles.mdCode}>{m[4]}</code>);
+      else if (m[5] !== undefined) parts.push(
+        <a key={key++} href={m[6]} target="_blank" rel="noopener noreferrer" style={styles.mdLink}>{m[5]}</a>
+      );
       remaining = remaining.slice(m.index + m[0].length);
     }
     return parts;
@@ -2076,36 +2086,27 @@ function Contributions({ data, update }) {
                       <textarea
                         style={styles.textarea}
                         value={c.impact}
-                        placeholder="Why it mattered…"
+                        placeholder="Why it mattered…&#10;&#10;Supports **bold**, _italic_, `code`, [link](url), - bullets, # headings"
                         onChange={(e) => update(d => { d.contributions.find(x=>x.id===c.id).impact = e.target.value; })}
                       />
                     </div>
                   </>
                 ) : (
-                  <>
-                    <div style={styles.fieldRow}>
-                      <label style={styles.label}>Title</label>
-                      <div style={styles.viewText}>{c.title || <span style={styles.viewTextEmpty}>—</span>}</div>
-                    </div>
-                    <div style={styles.twoColRow}>
-                      <div style={styles.fieldRow}>
-                        <label style={styles.label}>Date</label>
-                        <div style={styles.viewText}>
-                          {c.date ? (() => { const [y,m,d] = c.date.split('-'); return `${m}/${d}/${y}`; })() : <span style={styles.viewTextEmpty}>—</span>}
-                        </div>
-                      </div>
-                      <div style={styles.fieldRow}>
-                        <label style={styles.label}>Project / Area</label>
-                        <div style={styles.viewText}>{c.project || <span style={styles.viewTextEmpty}>—</span>}</div>
+                  <div style={styles.viewCard}>
+                    <div style={styles.viewCardMeta}>
+                      {c.title && <span style={styles.viewCardTitle}>{c.title}</span>}
+                      {!c.title && <span style={styles.viewTextEmpty}>No title yet — click Edit to fill this in.</span>}
+                      <div style={styles.viewCardMetaRow}>
+                        {c.date && (() => { const [y,m,d] = c.date.split('-'); return <span style={styles.viewCardMetaItem}>{m}/{d}/{y}</span>; })()}
+                        {c.project && <span style={styles.viewCardMetaItem}>{c.project}</span>}
                       </div>
                     </div>
-                    <div style={styles.fieldRow}>
-                      <label style={styles.label}>Impact / Outcome</label>
-                      <div style={{ ...styles.viewText, ...styles.viewTextBlock }}>
-                        {c.impact || <span style={styles.viewTextEmpty}>No notes yet.</span>}
-                      </div>
-                    </div>
-                  </>
+                    {c.impact ? (
+                      <div className="md-body" style={styles.viewCardBody}><MarkdownView text={c.impact} /></div>
+                    ) : (
+                      <div style={styles.viewCardBodyEmpty}>No impact notes yet.</div>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -2551,16 +2552,39 @@ const styles = {
   ticketTitle: { fontSize: 13.5, flex: 1 },
   ticketLinkCount: { fontSize: 11, color: colors.muted, fontFamily: "'JetBrains Mono', monospace" },
   ticketBody: { display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 6 },
-  viewText: {
-    fontSize: 13, color: colors.text, padding: '8px 10px',
-    background: colors.panel2, border: `1px solid ${colors.border}`, borderRadius: 7,
-    minHeight: 18,
+  viewCard: {
+    display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4,
   },
-  viewTextBlock: {
-    whiteSpace: 'pre-wrap', lineHeight: 1.6, minHeight: 40,
+  viewCardMeta: {
+    display: 'flex', flexDirection: 'column', gap: 4,
+  },
+  viewCardCode: {
+    fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5,
+    color: colors.accent, letterSpacing: 0.3,
+  },
+  viewCardTitle: {
+    fontSize: 15, fontWeight: 600, color: colors.text, lineHeight: 1.4,
+  },
+  viewCardMetaRow: {
+    display: 'flex', gap: 12, marginTop: 2,
+  },
+  viewCardMetaItem: {
+    fontSize: 12, color: colors.muted, fontFamily: "'JetBrains Mono', monospace",
+  },
+  viewCardBody: {
+    fontSize: 13, color: colors.text, lineHeight: 1.7,
+    paddingTop: 12, marginTop: 4,
+    borderTop: `1px solid ${colors.border}`,
+  },
+  viewCardBodyEmpty: {
+    fontSize: 13, color: colors.muted, fontStyle: 'italic',
+    paddingTop: 12, marginTop: 4, borderTop: `1px solid ${colors.border}`,
+  },
+  viewCardFooter: {
+    paddingTop: 12, marginTop: 4, borderTop: `1px solid ${colors.border}`,
   },
   viewTextEmpty: {
-    color: colors.muted, fontStyle: 'italic',
+    color: colors.muted, fontStyle: 'italic', fontSize: 13,
   },
   dateChip: {
     fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
@@ -2697,6 +2721,9 @@ const styles = {
     borderRadius: 4, padding: '1px 5px', fontSize: '0.88em',
     fontFamily: "'JetBrains Mono', monospace", color: colors.accent,
   },
+  mdLink: {
+    color: colors.accent, textDecoration: 'underline', textUnderlineOffset: 3,
+  },
 
   // Status calendar
   statusLegend: {
@@ -2816,20 +2843,20 @@ input::placeholder, textarea::placeholder {
 }
 
 /* Knowledge base markdown preview lists */
-.kb-preview ul {
+.kb-preview ul, .md-body ul {
   list-style-position: outside !important;
 }
-.kb-preview ul.md-ul-disc { list-style-type: disc !important; }
-.kb-preview ul.md-ul-circle { list-style-type: circle !important; }
-.kb-preview ul.md-ul-square { list-style-type: square !important; }
-.kb-preview ol {
+.kb-preview ul.md-ul-disc, .md-body ul.md-ul-disc { list-style-type: disc !important; }
+.kb-preview ul.md-ul-circle, .md-body ul.md-ul-circle { list-style-type: circle !important; }
+.kb-preview ul.md-ul-square, .md-body ul.md-ul-square { list-style-type: square !important; }
+.kb-preview ol, .md-body ol {
   list-style-type: decimal !important;
   list-style-position: outside !important;
 }
-.kb-preview li {
+.kb-preview li, .md-body li {
   display: list-item !important;
 }
-.kb-preview li.md-li-checkbox {
+.kb-preview li.md-li-checkbox, .md-body li.md-li-checkbox {
   list-style-type: none !important;
 }
 `;

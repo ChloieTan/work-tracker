@@ -162,10 +162,150 @@ const { useState, useEffect, useRef, useCallback } = React;
 
 // ---------- Storage helpers ----------
 
+const MARKDOWN_REFERENCE_CONTENT = `# Markdown Reference
+
+Everything you can write in the Knowledge Base, Ticket notes, and Contribution impact fields.
+
+---
+
+## Headings
+
+# Heading 1
+## Heading 2
+### Heading 3
+
+---
+
+## Text Formatting
+
+**bold text** using \`**double asterisks**\`
+_italic text_ using \`_underscores_\`
+\`inline code\` using \`backticks\`
+**_bold and italic_** combined
+
+---
+
+## Links
+
+[Link text](https://example.com)
+[Another link](https://google.com)
+
+---
+
+## Bullet Lists
+
+- First item
+- Second item
+  - Nested item
+    - Deeply nested
+  - Back to second level
+- Back to top level
+
+---
+
+## Numbered Lists
+
+1. First step
+2. Second step
+   1. Sub-step A
+   2. Sub-step B
+3. Third step
+
+---
+
+## Checkboxes
+
+- [ ] Unchecked task (click to check in Preview)
+- [x] Completed task
+- [ ] Another todo
+  - [ ] Nested todo
+  - [x] Nested done
+
+---
+
+## Blockquotes
+
+> This is a blockquote.
+> It can span multiple lines by starting each with >.
+
+---
+
+## Tables
+
+| Column A | Column B | Column C |
+|---|---|---|
+| plain text | **bold** | _italic_ |
+| \`code\` | [link](https://example.com) | <u>underline</u> |
+| line 1<br>line 2 | <span style="color:#7fb6a8">green</span> | <span style="color:#d98a8a">red</span> |
+
+---
+
+## Code Blocks
+
+Plain code block (no syntax highlighting):
+
+\`\`\`
+const greeting = "hello world";
+console.log(greeting);
+\`\`\`
+
+You can label it with a language (display only):
+
+\`\`\`javascript
+function add(a, b) {
+  return a + b;
+}
+\`\`\`
+
+---
+
+## Horizontal Rule
+
+Three or more dashes, asterisks, or underscores on their own line:
+
+---
+
+---
+
+## Inline HTML
+
+Raw HTML tags work inline anywhere:
+
+- Line break: line 1<br>line 2
+- <strong>Strong</strong>, <em>italic</em>, <u>underline</u>, <s>strikethrough</s>
+- <mark>Highlighted text</mark>
+- <small>Smaller text</small>
+- <sup>superscript</sup> and <sub>subscript</sub>
+- <span style="color:#9b8bd4">Custom color</span>
+- <span style="font-family: monospace; background:#1f232b; padding:2px 6px; border-radius:4px">styled span</span>
+
+---
+
+## Multi-line HTML Blocks
+
+Use a \`\`\`html fence for multi-line HTML that spans several lines:
+
+\`\`\`html
+<div style="background:#1f232b; border-left:3px solid #8fa3c4; padding:12px 16px; border-radius:8px">
+  <strong>💡 Tip:</strong> This is a styled callout box.<br>
+  You can put anything inside — formatted text, links, etc.
+</div>
+\`\`\`
+
+\`\`\`html
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
+  <div style="background:#1f232b; padding:12px; border-radius:8px">Left panel</div>
+  <div style="background:#1f232b; padding:12px; border-radius:8px">Right panel</div>
+</div>
+\`\`\`
+`;
+
 const defaultData = {
   logs: {},        // { 'YYYY-MM-DD': { html: '<ul>...</ul>', ticketIds: [] } }
   tickets: [],      // { id, code, title, notes }
-  kb: [],           // { id, type: 'folder'|'doc', name, parentId, content }
+  kb: [
+    { id: 'doc-md-ref', type: 'doc', name: '📖 Markdown Reference', parentId: null, content: MARKDOWN_REFERENCE_CONTENT },
+  ],
   contributions: [],// { id, title, date, impact, project }
   status: {}        // { 'YYYY-MM-DD': 'office'|'wfh'|'leave'|'holiday' }
 };
@@ -1313,6 +1453,18 @@ function Tickets({ data, update, initialOpenId, onConsumeInitialOpenId }) {
     if (editingId === id) setEditingId(null);
   };
 
+  const toggleTicketCheckbox = (ticketId, lineIndex) => {
+    update(d => {
+      const ticket = d.tickets.find(t => t.id === ticketId);
+      if (!ticket) return;
+      const lines = (ticket.notes || '').split('\n');
+      if (lines[lineIndex] === undefined) return;
+      if (/\[ \]/.test(lines[lineIndex])) lines[lineIndex] = lines[lineIndex].replace(/\[ \]/, '[x]');
+      else if (/\[[xX]\]/.test(lines[lineIndex])) lines[lineIndex] = lines[lineIndex].replace(/\[[xX]\]/, '[ ]');
+      ticket.notes = lines.join('\n');
+    });
+  };
+
   const q = query.trim().toLowerCase();
   const tickets = data.tickets.filter(t => {
     if (!q) return true;
@@ -1434,7 +1586,7 @@ function Tickets({ data, update, initialOpenId, onConsumeInitialOpenId }) {
                         {!t.code && !t.title && <span style={styles.viewTextEmpty}>No details yet — click Edit to fill this in.</span>}
                       </div>
                       {t.notes ? (
-                        <div className="md-body" style={styles.viewCardBody}><MarkdownView text={t.notes} /></div>
+                        <div className="md-body" style={styles.viewCardBody}><MarkdownView text={t.notes} onToggleCheckbox={(lineIndex) => toggleTicketCheckbox(t.id, lineIndex)} /></div>
                       ) : (
                         <div style={styles.viewCardBodyEmpty}>No notes yet.</div>
                       )}
@@ -1707,7 +1859,7 @@ function KnowledgeBase({ data, update }) {
                 <textarea
                   style={styles.kbDocBody}
                   value={active.content}
-                  placeholder="Write anything — terminology, how-tos, FAQs, contacts…&#10;&#10;# Heading&#10;## Subheading&#10;**bold** _italic_&#10;- bullet point&#10;- [ ] checkbox&#10;1. numbered item&#10;> quote&#10;`inline code`&#10;[link text](https://url.com)&#10;---&#10;&#10;| Col A | Col B |&#10;|---|---|&#10;| val 1 | val 2 |&#10;&#10;```&#10;code block&#10;```"
+                  placeholder="Write anything — terminology, how-tos, FAQs, contacts…&#10;&#10;# Heading&#10;## Subheading&#10;**bold** _italic_&#10;- bullet point&#10;- [ ] checkbox&#10;1. numbered item&#10;> quote&#10;`inline code`&#10;[link text](https://url.com)&#10;<br> for line breaks, <strong>raw HTML</strong> works too&#10;---&#10;&#10;| Col A | **bold** | _italic_ |&#10;|---|---|---|&#10;| val 1 | `code` | [link](url) |&#10;&#10;```&#10;code block&#10;```&#10;&#10;```html&#10;&lt;div style=&quot;color:red&quot;&gt;multi-line HTML block&lt;/div&gt;&#10;```"
                   onChange={(e) => update(d => { d.kb.find(i => i.id === active.id).content = e.target.value; })}
                 />
               ) : (
@@ -1743,11 +1895,11 @@ function MarkdownView({ text, onToggleCheckbox }) {
   let listStack = [];
 
   const inline = (str) => {
-    // bold, italic, code, links
+    // bold, italic, code, links, raw inline HTML
     const parts = [];
     let remaining = str;
     let key = 0;
-    const regex = /(\*\*([^*]+)\*\*|_([^_]+)_|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/;
+    const regex = /(\*\*([^*]+)\*\*|_([^_]+)_|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)|(<[a-zA-Z][^>]*>.*?<\/[a-zA-Z]+>|<[a-zA-Z][^>]*\/>|<br\s*\/?>))/;
     while (remaining.length) {
       const m = remaining.match(regex);
       if (!m) { parts.push(remaining); break; }
@@ -1757,6 +1909,9 @@ function MarkdownView({ text, onToggleCheckbox }) {
       else if (m[4] !== undefined) parts.push(<code key={key++} style={styles.mdCode}>{m[4]}</code>);
       else if (m[5] !== undefined) parts.push(
         <a key={key++} href={m[6]} target="_blank" rel="noopener noreferrer" style={styles.mdLink}>{m[5]}</a>
+      );
+      else if (m[7] !== undefined) parts.push(
+        <span key={key++} dangerouslySetInnerHTML={{ __html: m[7] }} />
       );
       remaining = remaining.slice(m.index + m[0].length);
     }
@@ -1845,7 +2000,6 @@ function MarkdownView({ text, onToggleCheckbox }) {
   const isTableSeparatorLine = (line) => {
     const t = line.trim();
     if (!t) return false;
-    // strip leading/trailing pipes, then check every cell is dashes (with optional colons for alignment)
     const cells = t.replace(/^\||\|$/g, '').split('|');
     return cells.length > 0 && cells.every(c => /^:?-+:?$/.test(c.trim()));
   };
@@ -1854,6 +2008,16 @@ function MarkdownView({ text, onToggleCheckbox }) {
     let t = line.trim();
     t = t.replace(/^\|/, '').replace(/\|$/, '');
     return t.split('|').map(c => c.trim());
+  };
+
+  // If a cell contains any HTML tags, render the whole thing as raw HTML
+  // to avoid the inline() regex mishandling nested tags like <ul><li>...</li></ul>.
+  // Otherwise fall back to the normal inline() parser for markdown formatting.
+  const renderCell = (content) => {
+    if (/<[a-zA-Z]/.test(content)) {
+      return <span dangerouslySetInnerHTML={{ __html: content }} />;
+    }
+    return inline(content);
   };
 
   let i = 0;
@@ -1865,18 +2029,25 @@ function MarkdownView({ text, onToggleCheckbox }) {
     // --- Fenced code block: ```optional-lang ... ``` ---
     if (/^```/.test(trimmed)) {
       flushList();
-      const lang = trimmed.slice(3).trim();
+      const lang = trimmed.slice(3).trim().toLowerCase();
       const codeLines = [];
       let j = i + 1;
       while (j < lines.length && !/^```/.test(lines[j].trim())) {
         codeLines.push(lines[j]);
         j++;
       }
-      blocks.push(
-        <pre key={blocks.length} style={styles.mdPre}>
-          <code style={styles.mdPreCode}>{codeLines.join('\n')}</code>
-        </pre>
-      );
+      if (lang === 'html') {
+        // Render as raw HTML block
+        blocks.push(
+          <div key={blocks.length} dangerouslySetInnerHTML={{ __html: codeLines.join('\n') }} />
+        );
+      } else {
+        blocks.push(
+          <pre key={blocks.length} style={styles.mdPre}>
+            <code style={styles.mdPreCode}>{codeLines.join('\n')}</code>
+          </pre>
+        );
+      }
       i = j + 1; // skip the closing ``` line too
       continue;
     }
@@ -1904,7 +2075,7 @@ function MarkdownView({ text, onToggleCheckbox }) {
           <thead>
             <tr>
               {headerCells.map((cell, ci) => (
-                <th key={ci} style={styles.mdTh}>{inline(cell)}</th>
+                <th key={ci} style={styles.mdTh}>{renderCell(cell)}</th>
               ))}
             </tr>
           </thead>
@@ -1912,7 +2083,7 @@ function MarkdownView({ text, onToggleCheckbox }) {
             {rows.map((row, ri) => (
               <tr key={ri}>
                 {headerCells.map((_, ci) => (
-                  <td key={ci} style={styles.mdTd}>{row[ci] !== undefined ? inline(row[ci]) : ''}</td>
+                  <td key={ci} style={styles.mdTd}>{row[ci] !== undefined ? renderCell(row[ci]) : ''}</td>
                 ))}
               </tr>
             ))}
@@ -1940,6 +2111,9 @@ function MarkdownView({ text, onToggleCheckbox }) {
     } else if (/^>\s/.test(trimmed)) {
       flushList();
       blocks.push(<blockquote key={blocks.length} style={styles.mdQuote}>{inline(trimmed.replace(/^>\s/, ''))}</blockquote>);
+    } else if (/^<[a-zA-Z]/.test(trimmed)) {
+      flushList();
+      blocks.push(<div key={blocks.length} dangerouslySetInnerHTML={{ __html: trimmed }} />);
     } else if (trimmed === '') {
       flushList();
       blocks.push(<div key={blocks.length} style={{ height: 8 }} />);
@@ -1976,6 +2150,18 @@ function Contributions({ data, update }) {
     update(d => { d.contributions = d.contributions.filter(c => c.id !== id); });
     if (openId === id) setOpenId(null);
     if (editingId === id) setEditingId(null);
+  };
+
+  const toggleContribCheckbox = (contribId, lineIndex) => {
+    update(d => {
+      const contrib = d.contributions.find(c => c.id === contribId);
+      if (!contrib) return;
+      const lines = (contrib.impact || '').split('\n');
+      if (lines[lineIndex] === undefined) return;
+      if (/\[ \]/.test(lines[lineIndex])) lines[lineIndex] = lines[lineIndex].replace(/\[ \]/, '[x]');
+      else if (/\[[xX]\]/.test(lines[lineIndex])) lines[lineIndex] = lines[lineIndex].replace(/\[[xX]\]/, '[ ]');
+      contrib.impact = lines.join('\n');
+    });
   };
 
   const q = query.trim().toLowerCase();
@@ -2102,7 +2288,7 @@ function Contributions({ data, update }) {
                       </div>
                     </div>
                     {c.impact ? (
-                      <div className="md-body" style={styles.viewCardBody}><MarkdownView text={c.impact} /></div>
+                      <div className="md-body" style={styles.viewCardBody}><MarkdownView text={c.impact} onToggleCheckbox={(lineIndex) => toggleContribCheckbox(c.id, lineIndex)} /></div>
                     ) : (
                       <div style={styles.viewCardBodyEmpty}>No impact notes yet.</div>
                     )}
@@ -2843,6 +3029,8 @@ input::placeholder, textarea::placeholder {
 }
 
 /* Knowledge base markdown preview lists */
+.kb-preview strong, .md-body strong { font-weight: 700 !important; }
+.kb-preview em, .md-body em { font-style: italic !important; }
 .kb-preview ul, .md-body ul {
   list-style-position: outside !important;
 }
